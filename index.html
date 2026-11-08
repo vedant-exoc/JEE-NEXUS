@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#09090d">
+  <meta name="description" content="JEE NEXUS — your personal, offline-first study command centre.">
+  <title>JEE NEXUS — Study Command Centre</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#dashboard" aria-label="JEE NEXUS dashboard"><span class="brand-mark">N</span><span>JEE <b>NEXUS</b><small>STUDY COMMAND CENTRE</small></span></a>
+      <div class="nav-label">WORKSPACE</div>
+      <nav id="main-nav" aria-label="Main navigation">
+        <button class="nav-item active" data-view="dashboard"><span>◈</span>Dashboard</button>
+        <button class="nav-item" data-view="Mathematics"><span>∑</span>Mathematics</button>
+        <button class="nav-item" data-view="Physics"><span>◉</span>Physics</button>
+        <button class="nav-item" data-view="Chemistry"><span>⚗</span>Chemistry</button>
+        <div class="nav-divider"></div>
+        <button class="nav-item" data-view="planner"><span>▦</span>Lecture Planner</button>
+        <button class="nav-item" data-view="backlogs"><span>◷</span>Backlog Manager</button>
+        <button class="nav-item" data-view="questions"><span>✳</span>Question Tracker</button>
+        <button class="nav-item" data-view="revision"><span>↻</span>Revision Centre</button>
+        <button class="nav-item" data-view="settings"><span>⚙</span>Settings</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="offline-pill"><i></i><span id="connection-label">Checking connection…</span></div><div class="local-note">Your data stays on this device.</div></div>
+    </aside>
+    <main class="main-area">
+      <header class="topbar"><button class="menu-toggle" id="menu-toggle" aria-label="Toggle navigation">☰</button><div class="breadcrumb" id="breadcrumb">Workspace <span>/</span> Dashboard</div><div class="top-actions"><span class="today-label" id="today-label"></span><button class="icon-button" id="quick-add" title="Add a task">＋</button><div class="avatar" id="avatar">S</div></div></header>
+      <section id="app" class="content" aria-live="polite"></section>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status"></div>
+  <dialog id="record-dialog"><form id="record-form" method="dialog"><div class="dialog-head"><div><div class="eyebrow" id="form-eyebrow">NEW RECORD</div><h2 id="form-title">Add to your workspace</h2></div><button class="close-button" value="cancel" aria-label="Close">×</button></div><div id="form-fields" class="form-grid"></div><div class="dialog-actions"><button class="button secondary" value="cancel">Cancel</button><button class="button primary" id="save-record" value="default">Save record</button></div></form></dialog>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+  <script src="app.js" defer></script>
+</body>
+</html>
