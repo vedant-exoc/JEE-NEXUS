@@ -1,577 +1,182 @@
-const SUBJECTS = ['Mathematics', 'Physics', 'Chemistry'];
-const appState = {
-  supabase: null,
-  session: null,
-  user: null,
-  profile: null,
-  records: [],
-  view: 'dashboard',
-  subjectTab: 'notes',
-  authMode: 'login',
-  cloudReady: false,
-  lastSynced: null
-};
+/* JEE NEXUS V2 — browser-only design preview. No auth, remote API, or cloud writes. */
+(() => {
+  'use strict';
 
-const appEl = document.getElementById('app');
-const authView = document.getElementById('auth-view');
-const mainShell = document.getElementById('main-shell');
-const messageEls = {
-  login: document.getElementById('login-message'),
-  invite: document.getElementById('invite-message'),
-  admin: document.getElementById('admin-message')
-};
-
-window.__SUPABASE_CONFIG__ = {
-  url: 'https://YOUR_PROJECT_REF.supabase.co',
-  anonKey: 'YOUR_SUPABASE_ANON_KEY'
-};
-
-function getConfig() {
-  return window.__SUPABASE_CONFIG__ || { url: '', anonKey: '' };
-}
-
-function setMessage(type, text, isError = false) {
-  const el = messageEls[type];
-  if (!el) return;
-  el.textContent = text;
-  el.style.color = isError ? '#ff9bb0' : '#8ff8c8';
-}
-
-function showAuth() {
-  authView.classList.remove('hidden');
-  mainShell.classList.add('hidden');
-}
-
-function showApp() {
-  authView.classList.add('hidden');
-  mainShell.classList.remove('hidden');
-  const name = (appState.profile?.full_name || appState.user?.email || 'User').split(' ')[0];
-  document.getElementById('user-pill').textContent = name;
-}
-
-function escapeHtml(value) {
-  return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
-
-function capitalize(input) {
-  return input ? input.charAt(0).toUpperCase() + input.slice(1) : 'Workspace';
-}
-
-function initSupabase() {
-  const cfg = getConfig();
-  if (!cfg.url || !cfg.anonKey || cfg.url.includes('YOUR_PROJECT_REF') || cfg.anonKey.includes('YOUR_')) {
-    console.warn('Supabase is not configured yet. The app is in safe placeholder mode until environment values are added.');
-    return false;
-  }
-
-  appState.supabase = window.supabase.createClient(cfg.url, cfg.anonKey, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true
-    }
-  });
-
-  appState.cloudReady = true;
-  return true;
-}
-
-function bindEvents() {
-  document.querySelectorAll('[data-auth-view]').forEach(button => {
-    button.addEventListener('click', () => {
-      const next = button.dataset.authView;
-      appState.authMode = next;
-      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.authView === next));
-      document.getElementById('login-form').classList.toggle('hidden', next !== 'login');
-      document.getElementById('invite-form').classList.toggle('hidden', next !== 'invite');
-    });
-  });
-
-  document.querySelector('#login-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const email = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-
-    if (!appState.supabase) {
-      setMessage('login', 'Supabase credentials are not configured yet. Add the project URL and anon key first.', true);
-      return;
-    }
-
-    setMessage('login', 'Signing in...');
-
-    try {
-      const { data, error } = await appState.supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-
-      appState.session = data.session;
-      await loadUserProfile();
-      await notifyLogin({ email, userId: data.user.id, appName: 'JEE NEXUS' });
-      showApp();
-      renderApp();
-      setMessage('login', '');
-    } catch (error) {
-      setMessage('login', error.message || 'Login failed.', true);
-    }
-  });
-
-  document.querySelector('#invite-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const email = document.getElementById('invite-email').value.trim();
-    const token = document.getElementById('invite-token').value.trim();
-
-    try {
-      setMessage('invite', 'Validating invitation...');
-      const response = await fetch('/.netlify/functions/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'validate', email, token })
-      });
-
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || 'Invitation validation failed.');
-
-      if (!appState.supabase) {
-        setMessage('invite', 'Supabase has not been configured in this deployment yet. Add your project URL and anon key, then test registration again.', true);
-        return;
-      }
-
-      const { data, error } = await appState.supabase.auth.signUp({
-        email,
-        password: json.password || 'JeeNexus@2026',
-        options: { emailRedirectTo: window.location.origin }
-      });
-
-      if (error) throw error;
-      setMessage('invite', 'Invitation accepted. Check your email to verify the account and complete setup.');
-    } catch (error) {
-      setMessage('invite', error.message || 'Could not complete registration.', true);
-    }
-  });
-
-  document.getElementById('forgot-password').addEventListener('click', async () => {
-    const email = document.getElementById('login-email').value.trim();
-    if (!email) {
-      setMessage('login', 'Enter your email before requesting a password reset.', true);
-      return;
-    }
-
-    try {
-      if (!appState.supabase) throw new Error('Supabase is not configured.');
-      setMessage('login', 'Sending password reset email...');
-      const { error } = await appState.supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
-      setMessage('login', 'Password reset email sent.');
-    } catch (error) {
-      setMessage('login', error.message || 'Could not send reset email.', true);
-    }
-  });
-
-  document.querySelectorAll('.toggle-password').forEach(button => {
-    button.addEventListener('click', () => {
-      const target = document.getElementById(button.dataset.target);
-      const isHidden = target.type === 'password';
-      target.type = isHidden ? 'text' : 'password';
-      button.textContent = isHidden ? 'Hide' : 'Show';
-    });
-  });
-
-  document.getElementById('logout-btn').addEventListener('click', async () => {
-    if (appState.supabase) {
-      await appState.supabase.auth.signOut();
-    }
-    appState.session = null;
-    appState.profile = null;
-    showAuth();
-  });
-
-  document.querySelectorAll('.nav-item').forEach(button => {
-    button.addEventListener('click', () => {
-      const view = button.dataset.view;
-      appState.view = view;
-      document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === view));
-      renderApp();
-    });
-  });
-
-  document.addEventListener('click', async (event) => {
-    const subjectCard = event.target.closest('[data-subject]');
-    if (subjectCard) {
-      appState.view = subjectCard.dataset.subject;
-      document.querySelectorAll('.nav-item').forEach(item => item.classList.toggle('active', item.dataset.view === appState.view));
-      renderApp();
-      return;
-    }
-
-    const tabButton = event.target.closest('.tab-label');
-    if (tabButton) {
-      appState.subjectTab = tabButton.dataset.tab;
-      renderSubjectView();
-      return;
-    }
-
-    if (event.target.closest('#save-profile')) {
-      const value = document.getElementById('profile-name').value.trim();
-      localStorage.setItem('jee-nexus-profile-name', value || 'Scholar');
-      renderApp();
-      return;
-    }
-
-    if (event.target.closest('#export-data')) {
-      exportFallbackData();
-      return;
-    }
-
-    if (event.target.closest('#sync-now')) {
-      await syncRecords();
-      return;
-    }
-
-    const deleteAction = event.target.closest('[data-action="delete"]');
-    if (deleteAction) {
-      const id = deleteAction.dataset.id;
-      appState.records = appState.records.filter(record => String(record.id) !== String(id));
-      localStorage.setItem('jee-nexus-demo-records', JSON.stringify(appState.records));
-      renderSubjectView();
-    }
-  });
-}
-
-async function hydrateFallbackRecords() {
-  const saved = localStorage.getItem('jee-nexus-demo-records');
-  if (saved) {
-    try {
-      appState.records = JSON.parse(saved);
-      return;
-    } catch {
-      appState.records = [];
-    }
-  }
-
-  appState.records = [
-    { id: '1', subject: 'Mathematics', type: 'note', title: 'Quadratic formulas', status: 'Completed', category: 'Formula', content: 'x = (-b ± √(b² - 4ac))/2a', createdAt: Date.now() },
-    { id: '2', subject: 'Physics', type: 'question', title: 'Projectile motion', status: 'Solved', difficulty: 'Medium', source: 'PYQ', topic: 'Kinematics', createdAt: Date.now() },
-    { id: '3', subject: 'Chemistry', type: 'lecture', title: 'Coordination chemistry', status: 'In Progress', chapter: 'Coordination', createdAt: Date.now() },
-    { id: '4', subject: 'Mathematics', type: 'backlog', title: 'Trigonometric identities', status: 'Not Started', priority: 'High', targetDate: '2026-11-15', createdAt: Date.now() },
-    { id: '5', subject: 'Physics', type: 'revision', title: 'Ray optics', status: 'Not Started', category: 'Chapter', createdAt: Date.now() }
+  const subjects = ['Mathematics', 'Physics', 'Chemistry'];
+  const meta = {
+    Mathematics: { icon: '∑', tint: 'math', line: 'Patterns, proofs, and problem solving' },
+    Physics: { icon: '◉', tint: 'physics', line: 'Concepts, derivations, and numericals' },
+    Chemistry: { icon: '⚗', tint: 'chemistry', line: 'Reactions, exceptions, and NCERT' }
+  };
+  const sampleRecords = [
+    { id: 'demo-1', subject: 'Mathematics', type: 'note', title: 'Quadratic equations', chapter: 'Algebra', status: 'Completed', category: 'Formula', content: 'Discriminant: D = b² − 4ac', createdAt: '2026-01-03' },
+    { id: 'demo-2', subject: 'Physics', type: 'lecture', title: 'Newton’s laws — Lecture 04', chapter: 'Laws of Motion', status: 'In Progress', date: '2026-01-04', createdAt: '2026-01-03' },
+    { id: 'demo-3', subject: 'Chemistry', type: 'question', title: 'Equilibrium practice set', chapter: 'Chemical Equilibrium', status: 'Solved', difficulty: 'Medium', source: 'PYQ', createdAt: '2026-01-02' },
+    { id: 'demo-4', subject: 'Mathematics', type: 'backlog', title: 'Trigonometry — Lecture 02', chapter: 'Trigonometry', status: 'Not Started', priority: 'High', targetDate: '2026-01-10', createdAt: '2026-01-01' },
+    { id: 'demo-5', subject: 'Physics', type: 'revision', title: 'Revise ray optics formulae', chapter: 'Ray Optics', status: 'Needs Revision', category: 'Formula', createdAt: '2026-01-02' },
+    { id: 'demo-6', subject: 'Chemistry', type: 'task', title: 'Read NCERT: p-block', chapter: 'Inorganic Chemistry', status: 'Completed', createdAt: '2026-01-01' }
   ];
-}
+  let records = sampleRecords.map(item => ({ ...item }));
+  let view = 'dashboard';
+  let subjectTab = 'notes';
+  let currentSubject = 'Mathematics';
+  const app = document.getElementById('app');
+  const auth = document.getElementById('auth-view');
+  const shell = document.getElementById('main-shell');
+  const dialog = document.getElementById('record-dialog');
+  const form = document.getElementById('record-form');
+  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  const listFor = (type, subject) => records.filter(record => record.type === type && (!subject || record.subject === subject));
+  const ratio = (done, total) => total ? Math.round(done * 100 / total) : 0;
+  const empty = (title, body) => `<div class="list-item"><div class="list-item-main"><strong>${esc(title)}</strong><small>${esc(body)}</small></div></div>`;
 
-async function loadUserProfile() {
-  if (!appState.supabase) return;
-
-  const { data: userData, error } = await appState.supabase.auth.getUser();
-  if (error) {
-    console.warn(error.message);
-    return;
+  function setAuthMessage(id, message, error = false) {
+    const el = document.getElementById(id);
+    el.textContent = message;
+    el.style.color = error ? '#ff9bb0' : '#00ff91';
   }
 
-  appState.user = userData.user;
-
-  const { data: profileData } = await appState.supabase.from('profiles').select('*').eq('id', userData.user.id).single();
-  appState.profile = profileData || {
-    full_name: userData.user.email?.split('@')[0] || 'Scholar',
-    role: 'user'
-  };
-}
-
-async function notifyLogin({ email, userId, appName }) {
-  if (!appState.cloudReady) return;
-  try {
-    await fetch('/.netlify/functions/login-notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, userId, appName })
-    });
-  } catch (error) {
-    console.warn('Login notification failed:', error);
-  }
-}
-
-async function syncRecords() {
-  if (!appState.supabase || !appState.user) {
-    localStorage.setItem('jee-nexus-demo-records', JSON.stringify(appState.records));
-    return;
+  function openPreview() {
+    auth.classList.add('hidden');
+    shell.classList.remove('hidden');
+    document.getElementById('user-pill').textContent = 'Demo preview';
+    document.getElementById('connection-status').textContent = 'Preview · not connected';
+    render();
   }
 
-  try {
-    const payload = appState.records.map(entry => ({ ...entry, user_id: appState.user.id }));
-    const { error } = await appState.supabase.from('study_records').upsert(payload, { onConflict: 'id' });
-    if (error) throw error;
-    appState.lastSynced = new Date().toISOString();
-    localStorage.setItem('jee-nexus-demo-records', JSON.stringify(appState.records));
-    renderApp();
-  } catch (error) {
-    console.warn('Cloud sync failed:', error);
-  }
-}
-
-function renderApp() {
-  if (!appState.session) {
-    showAuth();
-    return;
+  function pageHeader(eyebrow, title, description, canAdd = false) {
+    return `<div class="page-heading"><div><div class="eyebrow">${esc(eyebrow)}</div><h1>${esc(title)}</h1><p>${esc(description)}</p></div>${canAdd ? '<button class="primary-btn small-btn" data-add>＋ Add item</button>' : ''}</div>`;
   }
 
-  showApp();
-  document.getElementById('page-title').textContent = appState.view === 'admin' ? 'Admin Dashboard' : capitalize(appState.view);
-
-  if (appState.view === 'dashboard') {
-    renderDashboard();
-    return;
+  function stat(label, value, note) {
+    return `<div class="stat-card glass"><div class="stat-title">${esc(label)}</div><div class="stat-number">${esc(value)}</div><div class="stat-meta">${esc(note)}</div></div>`;
   }
 
-  if (SUBJECTS.includes(appState.view)) {
-    renderSubjectView();
-    return;
+  function card(record) {
+    const stateClass = ['Completed', 'Solved'].includes(record.status) ? 'green' : '';
+    const info = [record.subject, record.chapter, record.status, record.priority].filter(Boolean).join(' · ');
+    return `<article class="list-item"><div class="list-item-main"><strong>${esc(record.title)}</strong><small>${esc(info)}</small>${record.content ? `<small>${esc(record.content)}</small>` : ''}</div><div class="list-actions"><span class="pill ${stateClass}">${esc(record.status || 'Not Started')}</span>${!['Completed','Solved'].includes(record.status) ? `<button class="tiny-btn" data-complete="${esc(record.id)}">Complete</button>` : ''}<button class="tiny-btn" data-delete="${esc(record.id)}">Remove</button></div></article>`;
   }
 
-  if (appState.view === 'admin') {
-    renderAdminView();
-    return;
+  function renderDashboard() {
+    const backlog = listFor('backlog').filter(r => r.status !== 'Completed').length;
+    const solved = listFor('question').filter(r => r.status === 'Solved').length;
+    const revisions = listFor('revision');
+    const revisionPct = ratio(revisions.filter(r => r.status === 'Completed').length, revisions.length);
+    const tasks = listFor('task');
+    const tasksDone = tasks.filter(r => r.status === 'Completed').length;
+    app.innerHTML = `${pageHeader('JEE NEXUS / COMMAND CENTRE', 'Your study universe', 'A demo overview with sample records. Start with a subject, or explore a planner.', true)}<div class="stats-grid">${stat('TODAY’S TARGETS', `${tasksDone}/${tasks.length}`, 'Completed study tasks')}${stat('PENDING BACKLOG', backlog, 'Unfinished demo lectures')}${stat('QUESTIONS SOLVED', solved, 'Recorded sample questions')}${stat('REVISION PROGRESS', `${revisionPct}%`, 'Completed sample revisions')}</div><div class="cards-grid two-col"><section class="panel glass"><div class="panel-header"><h3>Subject workspaces</h3><span class="muted">Explore your PCM areas</span></div><div class="subject-grid">${subjects.map(subject => { const m = meta[subject], lectures = listFor('lecture', subject), complete = lectures.filter(r => r.status === 'Completed').length; return `<button class="subject-card glass" data-go-subject="${subject}"><div class="subject-header"><span class="subject-icon ${m.tint}">${m.icon}</span><span class="subject-percent">${ratio(complete, lectures.length)}%</span></div><h3>${subject.toUpperCase()}</h3><p>${m.line}</p></button>`; }).join('')}</div></section><section class="panel glass quote-panel"><div class="quote-mark">“</div><p>Small, consistent steps create extraordinary results.</p><div class="quote-footer">A NOTE TO YOUR FUTURE SELF</div></section></div><section class="panel glass"><div class="panel-header"><h3>Study focus</h3><button class="tiny-btn" data-go-view="planner">Open planner →</button></div><div class="list-stack">${records.filter(r => ['lecture','task'].includes(r.type)).slice(0,4).map(card).join('') || empty('No study items', 'Add a task or lecture to get started.')}</div></section>`;
   }
 
-  if (appState.view === 'settings') {
-    renderSettingsView();
-    return;
-  }
-
-  renderGenericView();
-}
-
-function renderDashboard() {
-  appEl.innerHTML = document.getElementById('dashboard-template').innerHTML;
-
-  const backlogCount = appState.records.filter(record => record.type === 'backlog' && record.status !== 'Completed').length;
-  const questionCount = appState.records.filter(record => record.type === 'question' && record.status === 'Solved').length;
-  const revisionCount = Math.round((appState.records.filter(record => record.type === 'revision' && record.status === 'Completed').length / Math.max(1, appState.records.filter(record => record.type === 'revision').length)) * 100);
-
-  document.getElementById('backlog-count').textContent = backlogCount;
-  document.getElementById('question-count').textContent = questionCount;
-  document.getElementById('revision-count').textContent = `${revisionCount}%`;
-  document.getElementById('daily-quote').textContent = 'Discipline compounds. Small consistent effort creates extraordinary outcomes.';
-
-  const completionFor = (subject) => {
-    const subjectRecords = appState.records.filter(record => record.subject === subject);
-    const done = subjectRecords.filter(record => record.status === 'Completed' || record.status === 'Solved').length;
-    return Math.round((done / Math.max(1, subjectRecords.length)) * 100);
-  };
-
-  document.getElementById('math-percent').textContent = `${completionFor('Mathematics')}%`;
-  document.getElementById('physics-percent').textContent = `${completionFor('Physics')}%`;
-  document.getElementById('chemistry-percent').textContent = `${completionFor('Chemistry')}%`;
-
-  const todaySchedule = appState.records.filter(record => record.type === 'lecture' || record.type === 'backlog').slice(0, 5);
-  const scheduleWrap = document.getElementById('today-schedule');
-  scheduleWrap.innerHTML = todaySchedule.length
-    ? todaySchedule.map(record => `
-      <div class="list-item">
-        <div class="list-item-main">
-          <strong>${escapeHtml(record.title || record.subject || 'Study block')}</strong>
-          <small>${escapeHtml(record.subject || 'General')} • ${escapeHtml(record.chapter || 'Preparation')}</small>
-        </div>
-        <span class="pill ${record.status === 'Completed' || record.status === 'Solved' ? 'green' : ''}">${escapeHtml(record.status || 'Pending')}</span>
-      </div>
-    `).join('')
-    : '<div class="list-item"><div class="list-item-main"><strong>No schedule yet</strong><small>Add lecture or backlog items to build your study focus.</small></div></div>';
-
-  document.getElementById('today-completion').textContent = `${Math.min(100, Math.round((questionCount + backlogCount + revisionCount) / 3))}%`;
-
-  document.querySelectorAll('[data-subject]').forEach(button => {
-    button.addEventListener('click', () => {
-      appState.view = button.dataset.subject;
-      renderApp();
-    });
-  });
-}
-
-function renderSubjectView() {
-  appEl.innerHTML = document.getElementById('subject-template').innerHTML;
-  document.getElementById('subject-heading').textContent = appState.view;
-
-  const tabs = [
-    ['notes', 'Notes'],
-    ['lectures', 'Lectures'],
-    ['backlogs', 'Backlogs'],
-    ['questions', 'Questions'],
-    ['revision', 'Revision']
-  ];
-
-  const tabsWrap = document.getElementById('subject-tabs');
-  tabsWrap.innerHTML = tabs.map(([key, label]) => `
-    <button class="tab-label ${appState.subjectTab === key ? 'active' : ''}" data-tab="${key}">${label}</button>
-  `).join('');
-
-  const filter = document.getElementById('subject-status-filter');
-  const search = document.getElementById('subject-search');
-
-  const renderItems = () => {
-    const subjectRecords = appState.records.filter(record => record.subject === appState.view && (
-      (appState.subjectTab === 'notes' && (record.type === 'note' || record.category === 'Formula')) ||
-      (appState.subjectTab === 'lectures' && record.type === 'lecture') ||
-      (appState.subjectTab === 'backlogs' && record.type === 'backlog') ||
-      (appState.subjectTab === 'questions' && record.type === 'question') ||
-      (appState.subjectTab === 'revision' && record.type === 'revision')
-    ));
-
-    const query = search.value.trim().toLowerCase();
-    const status = filter.value;
-
-    const items = subjectRecords.filter(record => {
-      const matchesSearch = !query || [record.title, record.chapter, record.topic, record.notes, record.content, record.solution].join(' ').toLowerCase().includes(query);
-      const matchesStatus = status === 'all' || record.status === status;
-      return matchesSearch && matchesStatus;
-    });
-
-    const list = document.getElementById('subject-list');
-    if (!items.length) {
-      list.innerHTML = '<div class="list-item"><div class="list-item-main"><strong>No records yet</strong><small>Use Add item to build your subject workspace.</small></div></div>';
-      return;
-    }
-
-    list.innerHTML = items.map(record => `
-      <div class="list-item">
-        <div class="list-item-main">
-          <strong>${escapeHtml(record.title || record.chapter || 'Untitled item')}</strong>
-          <small>${escapeHtml(record.subject || appState.view)} • ${escapeHtml(record.chapter || record.topic || record.category || 'General')}</small>
-        </div>
-        <div class="list-actions">
-          <span class="pill ${record.status === 'Completed' || record.status === 'Solved' ? 'green' : ''}">${escapeHtml(record.status || 'Not Started')}</span>
-          <button class="tiny-btn" data-action="delete" data-id="${record.id}">Delete</button>
-        </div>
-      </div>
-    `).join('');
-  };
-
-  search.addEventListener('input', renderItems);
-  filter.addEventListener('change', renderItems);
-
-  document.getElementById('add-subject-item').addEventListener('click', () => {
-    const typeMap = {
-      notes: 'note',
-      lectures: 'lecture',
-      backlogs: 'backlog',
-      questions: 'question',
-      revision: 'revision'
+  function renderSubject() {
+    const tabs = [['notes','Notes & formulas','note'],['lectures','Lectures','lecture'],['backlogs','Backlogs','backlog'],['questions','Questions','question'],['revision','Revision','revision']];
+    const tab = tabs.find(item => item[0] === subjectTab) || tabs[0];
+    const items = listFor(tab[2], currentSubject);
+    app.innerHTML = `${pageHeader(`${currentSubject.toUpperCase()} / WORKSPACE`, currentSubject, `${meta[currentSubject].line}. Preview records are temporary and not synced.`, true)}<div class="tabs-row">${tabs.map(([key,label]) => `<button class="tab-label ${subjectTab===key?'active':''}" data-tab="${key}">${label}</button>`).join('')}</div><section class="panel glass"><div class="panel-header"><h3>${tab[1]}</h3><span class="muted">${items.length} sample items</span></div><div class="toolbar"><input id="record-search" type="search" placeholder="Search this collection" /><select id="record-filter"><option value="all">All statuses</option><option>Not Started</option><option>In Progress</option><option>Completed</option><option>Solved</option><option>Needs Revision</option><option>Incorrect</option></select></div><div class="list-stack" id="record-list">${items.map(card).join('') || empty(`No ${tab[1].toLowerCase()} yet`, 'Use Add item to add a temporary preview record.')}</div></section>`;
+    const update = () => {
+      const q = document.getElementById('record-search').value.toLowerCase();
+      const status = document.getElementById('record-filter').value;
+      const filtered = items.filter(r => (!q || [r.title,r.chapter,r.content].join(' ').toLowerCase().includes(q)) && (status === 'all' || r.status === status));
+      document.getElementById('record-list').innerHTML = filtered.map(card).join('') || empty('No matches', 'Try another search or status.');
     };
-
-    appState.records.push({
-      id: `local-${Date.now()}`,
-      subject: appState.view,
-      type: typeMap[appState.subjectTab] || 'note',
-      title: `${appState.view} item`,
-      status: 'Not Started',
-      createdAt: Date.now()
-    });
-
-    localStorage.setItem('jee-nexus-demo-records', JSON.stringify(appState.records));
-    renderSubjectView();
-  });
-
-  renderItems();
-}
-
-function renderAdminView() {
-  if (appState.profile?.role !== 'admin') {
-    appEl.innerHTML = '<div class="panel glass"><div class="panel-header"><h3>Access denied</h3></div><p>You do not have administrator privileges.</p></div>';
-    return;
+    document.getElementById('record-search').addEventListener('input', update);
+    document.getElementById('record-filter').addEventListener('change', update);
   }
 
-  appEl.innerHTML = document.getElementById('admin-template').innerHTML;
+  function renderCollection(title, kind, description) {
+    const items = kind === 'backlog' ? listFor(kind).filter(r => r.status !== 'Completed') : kind === 'question' ? listFor(kind) : kind === 'lecture' ? listFor(kind) : listFor(kind);
+    app.innerHTML = `${pageHeader(`JEE NEXUS / ${title.toUpperCase()}`, title, description, true)}<div class="stats-grid">${stat('TOTAL ITEMS', items.length, 'Preview sample collection')}${stat('COMPLETED', items.filter(r => ['Completed','Solved'].includes(r.status)).length, 'Completed or solved')}${stat('IN PROGRESS', items.filter(r => r.status === 'In Progress').length, 'Active records')}${stat('TO REVIEW', items.filter(r => ['Needs Revision','Incorrect','Not Started'].includes(r.status)).length, 'Need another pass')}</div><section class="panel glass"><div class="panel-header"><h3>${title}</h3><span class="muted">Temporary demo data</span></div><div class="toolbar"><input id="record-search" type="search" placeholder="Search records" /><select id="subject-filter"><option value="all">All subjects</option>${subjects.map(s => `<option>${s}</option>`).join('')}</select><select id="record-filter"><option value="all">All statuses</option><option>Not Started</option><option>In Progress</option><option>Completed</option><option>Solved</option><option>Needs Revision</option><option>Incorrect</option></select></div><div class="list-stack" id="record-list">${items.map(card).join('') || empty('Nothing here yet', 'Add a preview item to explore this section.')}</div></section>`;
+    const update = () => {
+      const q = document.getElementById('record-search').value.toLowerCase();
+      const subject = document.getElementById('subject-filter').value;
+      const status = document.getElementById('record-filter').value;
+      const filtered = items.filter(r => (!q || [r.title,r.chapter,r.content].join(' ').toLowerCase().includes(q)) && (subject === 'all' || r.subject === subject) && (status === 'all' || r.status === status));
+      document.getElementById('record-list').innerHTML = filtered.map(card).join('') || empty('No matches', 'Try changing your filters.');
+    };
+    document.getElementById('record-search').addEventListener('input', update);
+    document.getElementById('subject-filter').addEventListener('change', update);
+    document.getElementById('record-filter').addEventListener('change', update);
+  }
 
-  const invitations = [
-    { email: 'demo@jee-nexus.app', status: 'Pending', expiresAt: '24h' },
-    { email: 'admin@jee-nexus.app', status: 'Active', expiresAt: '7d' }
-  ];
+  function renderSettings() {
+    app.innerHTML = `${pageHeader('JEE NEXUS / SETTINGS', 'Settings', 'The preview does not save account settings or connect to a cloud service.')}<div class="settings-grid"><section class="panel glass"><div class="panel-header"><h3>Cloud setup</h3></div><p>To activate authentication, invitations, and cloud sync, connect a Supabase project and configure Netlify Functions and environment variables.</p><p class="muted">No secrets should be added to this browser preview.</p></section><section class="panel glass"><div class="panel-header"><h3>Preview controls</h3></div><p>All sample records reset when this page is refreshed. Nothing is sent to a server.</p><button class="secondary-btn small-btn" data-reset-demo>Reset sample data</button></section></div>`;
+  }
 
-  const invitationList = document.getElementById('invitation-list');
-  invitationList.innerHTML = invitations.map(item => `
-    <div class="list-item">
-      <div class="list-item-main">
-        <strong>${escapeHtml(item.email)}</strong>
-        <small>Expires in ${escapeHtml(item.expiresAt)}</small>
-      </div>
-      <span class="pill ${item.status === 'Active' ? 'green' : ''}">${escapeHtml(item.status)}</span>
-    </div>
-  `).join('');
+  function renderAdmin() {
+    app.innerHTML = `${pageHeader('JEE NEXUS / ADMIN', 'Admin access', 'The demo cannot authenticate administrator permissions or send real invitations.')}<section class="panel glass"><div class="panel-header"><h3>Live admin features are not enabled in preview</h3></div><p>Invitation management, account controls, and login history must be protected by server-verified administrator permissions. No mock controls are presented as functional here.</p></section>`;
+  }
 
-  const users = [
-    { email: appState.user?.email || 'admin@jee-nexus.app', role: appState.profile?.role || 'admin' },
-    { email: 'candidate@jee-nexus.app', role: 'user' }
-  ];
+  function render() {
+    document.querySelectorAll('.nav-item').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+    document.getElementById('page-title').textContent = view === 'backlogs' ? 'Backlog Manager' : view === 'questions' ? 'Question Tracker' : view === 'planner' ? 'Lecture Planner' : view === 'revision' ? 'Revision Centre' : view === 'admin' ? 'Admin Dashboard' : view;
+    if (view === 'dashboard') return renderDashboard();
+    if (subjects.includes(view)) { currentSubject = view; return renderSubject(); }
+    if (view === 'planner') return renderCollection('Lecture Planner','lecture','Plan upcoming lectures and review the sample week.');
+    if (view === 'backlogs') return renderCollection('Backlog Manager','backlog','Prioritise pending lectures across Mathematics, Physics, and Chemistry.');
+    if (view === 'questions') return renderCollection('Question Tracker','question','Review solved questions, mistakes, and items to revisit.');
+    if (view === 'revision') return renderCollection('Revision Centre','revision','Review chapters and formula lists that need another pass.');
+    if (view === 'admin') return renderAdmin();
+    return renderSettings();
+  }
 
-  document.getElementById('user-list').innerHTML = users.map(item => `
-    <div class="list-item">
-      <div class="list-item-main">
-        <strong>${escapeHtml(item.email)}</strong>
-        <small>${escapeHtml(item.role)}</small>
-      </div>
-      <span class="pill ${item.role === 'admin' ? 'green' : ''}">${escapeHtml(item.role)}</span>
-    </div>
-  `).join('');
+  function openAddDialog() {
+    const select = form.elements.subject;
+    if (subjects.includes(view)) select.value = view;
+    else if (view === 'planner' || view === 'backlogs' || view === 'questions' || view === 'revision') select.value = 'Mathematics';
+    const typeMap = { planner:'lecture', backlogs:'backlog', questions:'question', revision:'revision' };
+    if (typeMap[view]) form.elements.type.value = typeMap[view];
+    document.getElementById('dialog-title').textContent = `Add ${subjects.includes(view) ? currentSubject : view === 'planner' ? 'lecture' : view === 'backlogs' ? 'backlog' : view === 'questions' ? 'question' : view === 'revision' ? 'revision item' : 'study item'}`;
+    dialog.showModal();
+  }
 
-  document.getElementById('admin-invite-form').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const email = document.getElementById('admin-email').value.trim();
-    if (!email) {
-      setMessage('admin', 'Enter an email address before sending an invite.', true);
+  document.addEventListener('click', event => {
+    const authTab = event.target.closest('[data-auth-view]');
+    if (authTab) {
+      const target = authTab.dataset.authView;
+      document.querySelectorAll('[data-auth-view]').forEach(button => button.classList.toggle('active', button === authTab));
+      document.getElementById('login-form').classList.toggle('hidden', target !== 'login');
+      document.getElementById('invite-form').classList.toggle('hidden', target !== 'invite');
       return;
     }
-
-    try {
-      setMessage('admin', 'Sending invitation...');
-      const response = await fetch('/.netlify/functions/invite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create', email })
-      });
-      const json = await response.json();
-      if (!response.ok) throw new Error(json.error || 'Invitation failed.');
-      setMessage('admin', `Invitation sent to ${email}.`);
-    } catch (error) {
-      setMessage('admin', error.message || 'Invitation failed.', true);
-    }
+    if (event.target.closest('#preview-button')) return openPreview();
+    const nav = event.target.closest('[data-view]');
+    if (nav) { view = nav.dataset.view; return render(); }
+    const subject = event.target.closest('[data-go-subject]');
+    if (subject) { view = subject.dataset.goSubject; subjectTab = 'notes'; return render(); }
+    const link = event.target.closest('[data-go-view]');
+    if (link) { view = link.dataset.goView; return render(); }
+    const tab = event.target.closest('[data-tab]');
+    if (tab) { subjectTab = tab.dataset.tab; return render(); }
+    if (event.target.closest('[data-add]')) return openAddDialog();
+    const complete = event.target.closest('[data-complete]');
+    if (complete) { const item = records.find(r => r.id === complete.dataset.complete); if (item) item.status = item.type === 'question' ? 'Solved' : 'Completed'; return render(); }
+    const remove = event.target.closest('[data-delete]');
+    if (remove) { records = records.filter(r => r.id !== remove.dataset.delete); return render(); }
+    if (event.target.closest('#dialog-close')) return dialog.close();
+    if (event.target.closest('#logout-btn')) { shell.classList.add('hidden'); auth.classList.remove('hidden'); return; }
+    if (event.target.closest('[data-reset-demo]')) { records = sampleRecords.map(item => ({ ...item })); return render(); }
   });
-}
 
-function renderSettingsView() {
-  appEl.innerHTML = document.getElementById('settings-template').innerHTML;
-  const savedName = localStorage.getItem('jee-nexus-profile-name') || appState.profile?.full_name || 'Scholar';
-  document.getElementById('profile-name').value = savedName;
-
-  document.getElementById('export-data').addEventListener('click', exportFallbackData);
-  document.getElementById('sync-now').addEventListener('click', syncRecords);
-}
-
-function renderGenericView() {
-  appEl.innerHTML = '<div class="panel glass"><div class="panel-header"><h3>Workspace</h3></div><p>This section is under active development.</p></div>';
-}
-
-function exportFallbackData() {
-  const blob = new Blob([JSON.stringify(appState.records, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'jee-nexus-backup.json';
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-async function initialize() {
-  bindEvents();
-  await hydrateFallbackRecords();
-  initSupabase();
-
-  if (appState.supabase) {
-    const { data: { session } } = await appState.supabase.auth.getSession();
-    appState.session = session;
-    if (session) {
-      await loadUserProfile();
-      renderApp();
-    } else {
-      showAuth();
-    }
-  } else {
-    showAuth();
-  }
-}
-
-window.addEventListener('DOMContentLoaded', initialize);
+  document.getElementById('login-form').addEventListener('submit', event => {
+    event.preventDefault();
+    setAuthMessage('login-message', 'Live sign-in is not connected in this preview. Configure Supabase before using real accounts.', true);
+  });
+  document.getElementById('invite-form').addEventListener('submit', event => {
+    event.preventDefault();
+    setAuthMessage('invite-message', 'Invitation validation requires the configured server function. This preview does not validate or consume invite tokens.', true);
+  });
+  document.getElementById('forgot-password').addEventListener('click', () => setAuthMessage('login-message', 'Password reset is available after Supabase Auth is configured.', true));
+  document.querySelectorAll('.toggle-password').forEach(button => button.addEventListener('click', () => {
+    const input = document.getElementById(button.dataset.target);
+    input.type = input.type === 'password' ? 'text' : 'password';
+    button.textContent = input.type === 'password' ? 'Show' : 'Hide';
+  }));
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    records.unshift({ id: `preview-${Date.now()}`, ...data, createdAt: new Date().toISOString() });
+    form.reset();
+    dialog.close();
+    render();
+  });
+})();

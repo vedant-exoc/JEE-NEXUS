@@ -3,86 +3,46 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="JEE NEXUS V2 — invitation-only, cloud-first study platform" />
+    <meta name="description" content="JEE NEXUS V2 — invitation-only cloud study platform" />
     <meta name="theme-color" content="#08090C" />
     <title>JEE NEXUS V2</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <div id="stars"></div>
+    <div id="stars" aria-hidden="true"></div>
 
-    <div id="auth-view" class="auth-shell visible">
+    <section id="auth-view" class="auth-shell visible">
       <div class="auth-panel glass">
         <div class="logo-wrap">
           <div class="brand-mark">N</div>
-          <div>
-            <div class="eyebrow">JEE NEXUS</div>
-            <h1>Secure access</h1>
-          </div>
+          <div><div class="eyebrow">JEE NEXUS</div><h1>Secure access</h1></div>
         </div>
-
         <div class="auth-switch">
-          <button class="tab active" data-auth-view="login">Login</button>
-          <button class="tab" data-auth-view="invite">Invitation</button>
+          <button class="tab active" data-auth-view="login" type="button">Login</button>
+          <button class="tab" data-auth-view="invite" type="button">Invitation</button>
         </div>
-
         <form id="login-form" class="auth-form">
-          <label>
-            <span>Email</span>
-            <input type="email" id="login-email" placeholder="you@example.com" required />
-          </label>
-
-          <label>
-            <span>Password</span>
-            <div class="password-wrap">
-              <input type="password" id="login-password" placeholder="Enter your password" required />
-              <button type="button" class="toggle-password" data-target="login-password">Show</button>
-            </div>
-          </label>
-
-          <div class="row between small-row">
-            <label class="checkbox-row"><input type="checkbox" id="remember-me" /> <span>Remember me</span></label>
-            <button type="button" class="link-button" id="forgot-password">Forgot password?</button>
-          </div>
-
+          <label><span>Email</span><input type="email" id="login-email" placeholder="you@example.com" required autocomplete="email" /></label>
+          <label><span>Password</span><div class="password-wrap"><input type="password" id="login-password" placeholder="Enter your password" required autocomplete="current-password" /><button type="button" class="toggle-password" data-target="login-password">Show</button></div></label>
+          <div class="row between small-row"><label class="checkbox-row"><input type="checkbox" id="remember-me" /><span>Remember me</span></label><button type="button" class="link-button" id="forgot-password">Forgot password?</button></div>
           <button type="submit" class="primary-btn">Sign in</button>
           <div id="login-message" class="message" role="status" aria-live="polite"></div>
         </form>
-
         <form id="invite-form" class="auth-form hidden">
-          <label>
-            <span>Invitation email</span>
-            <input type="email" id="invite-email" placeholder="invite-recipient@email.com" required />
-          </label>
-
-          <label>
-            <span>Invitation token</span>
-            <input type="text" id="invite-token" placeholder="Paste token from invite email" />
-          </label>
-
-          <button type="submit" class="secondary-btn">Validate &amp; register</button>
+          <label><span>Invitation email</span><input type="email" id="invite-email" placeholder="invite-recipient@email.com" required autocomplete="email" /></label>
+          <label><span>Invitation token</span><input type="text" id="invite-token" placeholder="Paste token from your invite email" required /></label>
+          <button type="submit" class="secondary-btn">Validate invitation</button>
           <div id="invite-message" class="message" role="status" aria-live="polite"></div>
         </form>
-
-        <div class="auth-footer">
-          <p>Invitation-based access only. Contact the administrator for a secure access link.</p>
-        </div>
+        <div class="auth-footer"><p>Invitation-based access only. Contact the administrator for an invite.</p></div>
+        <div class="preview-callout"><span>UI PREVIEW</span><p>Explore the interface with temporary sample data. This does not create an account or connect to a cloud database.</p><button id="preview-button" type="button" class="secondary-btn">Explore demo preview</button></div>
       </div>
-    </div>
+    </section>
 
     <div id="main-shell" class="main-shell hidden">
       <aside class="sidebar glass">
-        <div class="brand-box">
-          <div class="brand-mark">N</div>
-          <div>
-            <div class="brand-name">JEE NEXUS</div>
-            <div class="brand-sub">CLOUD-SECURE WORKSPACE</div>
-          </div>
-        </div>
-
-        <nav class="nav-list">
+        <div class="brand-box"><div class="brand-mark">N</div><div><div class="brand-name">JEE NEXUS</div><div class="brand-sub">CLOUD-SECURE WORKSPACE</div></div></div>
+        <nav class="nav-list" aria-label="Workspace navigation">
           <button class="nav-item active" data-view="dashboard">Dashboard</button>
           <button class="nav-item" data-view="Mathematics">Mathematics</button>
           <button class="nav-item" data-view="Physics">Physics</button>
@@ -94,181 +54,18 @@
           <button class="nav-item" data-view="admin">Admin</button>
           <button class="nav-item" data-view="settings">Settings</button>
         </nav>
-
-        <div class="sidebar-footer glass-sm">
-          <div class="status-line">
-            <span class="dot"></span>
-            <span id="connection-status">Cloud connected</span>
-          </div>
-          <button id="logout-btn" class="secondary-btn small-btn">Logout</button>
-        </div>
+        <div class="sidebar-footer glass-sm"><div class="status-line"><span class="dot"></span><span id="connection-status">Demo preview</span></div><button id="logout-btn" class="secondary-btn small-btn">Exit preview</button></div>
       </aside>
-
       <main class="workspace">
-        <header class="topbar glass">
-          <div>
-            <div class="eyebrow">Secure workspace</div>
-            <h2 id="page-title">Dashboard</h2>
-          </div>
-          <div class="topbar-right">
-            <div id="user-pill" class="user-pill">User</div>
-          </div>
-        </header>
-
-        <section id="app" class="content"></section>
+        <header class="topbar glass"><div><div class="eyebrow">JEE NEXUS / DEMO PREVIEW</div><h2 id="page-title">Dashboard</h2></div><div class="topbar-right"><div id="user-pill" class="user-pill">Preview</div></div></header>
+        <div class="preview-banner"><strong>Preview mode</strong> — sample records are for display only. Sign-in, invitations, cloud sync, and admin actions need live service configuration.</div>
+        <section id="app" class="content" aria-live="polite"></section>
       </main>
     </div>
 
-    <template id="dashboard-template">
-      <div class="stats-grid">
-        <div class="stat-card glass">
-          <div class="stat-title">Today’s completion</div>
-          <div class="stat-number" id="today-completion">0%</div>
-          <div class="stat-meta">Live from cloud</div>
-        </div>
-        <div class="stat-card glass">
-          <div class="stat-title">Pending backlog</div>
-          <div class="stat-number" id="backlog-count">0</div>
-          <div class="stat-meta">Lectures still pending</div>
-        </div>
-        <div class="stat-card glass">
-          <div class="stat-title">Questions solved</div>
-          <div class="stat-number" id="question-count">0</div>
-          <div class="stat-meta">Important problem set</div>
-        </div>
-        <div class="stat-card glass">
-          <div class="stat-title">Revision score</div>
-          <div class="stat-number" id="revision-count">0%</div>
-          <div class="stat-meta">Revision health</div>
-        </div>
-      </div>
+    <dialog id="record-dialog" class="record-dialog"><form id="record-form"><div class="panel-header"><h3 id="dialog-title">Add study item</h3><button type="button" class="tiny-btn" id="dialog-close">Close</button></div><label><span>Title</span><input name="title" required maxlength="120" placeholder="e.g. Laws of Motion — Lecture 2" /></label><label><span>Chapter / topic</span><input name="chapter" maxlength="120" placeholder="Chapter or topic" /></label><label><span>Record type</span><select name="type"><option value="note">Note</option><option value="lecture">Lecture</option><option value="backlog">Backlog</option><option value="question">Question</option><option value="revision">Revision</option><option value="task">Study task</option></select></label><label><span>Subject</span><select name="subject"><option>Mathematics</option><option>Physics</option><option>Chemistry</option></select></label><label><span>Status</span><select name="status"><option>Not Started</option><option>In Progress</option><option>Completed</option><option>Solved</option><option>Needs Revision</option><option>Incorrect</option></select></label><label><span>Notes</span><textarea name="content" rows="3" placeholder="Add details (optional)"></textarea></label><div class="dialog-actions"><button type="submit" class="primary-btn">Save preview item</button></div></form></dialog>
 
-      <div class="cards-grid two-col">
-        <div class="panel glass">
-          <div class="panel-header">
-            <h3>Today’s focus</h3>
-            <button class="tiny-btn">Open planner</button>
-          </div>
-          <div id="today-schedule"></div>
-        </div>
-
-        <div class="panel glass quote-panel">
-          <div class="quote-mark">“</div>
-          <p id="daily-quote">Discipline compounds.</p>
-          <div class="quote-footer">JEE NEXUS // daily intention</div>
-        </div>
-      </div>
-
-      <div class="subject-grid">
-        <button class="subject-card glass" data-subject="Mathematics">
-          <div class="subject-header">
-            <span class="subject-icon math">∑</span>
-            <span class="subject-percent" id="math-percent">0%</span>
-          </div>
-          <h3>MATHEMATICS</h3>
-          <p>Proofs, problem solving, and pattern recognition.</p>
-        </button>
-
-        <button class="subject-card glass" data-subject="Physics">
-          <div class="subject-header">
-            <span class="subject-icon physics">◉</span>
-            <span class="subject-percent" id="physics-percent">0%</span>
-          </div>
-          <h3>PHYSICS</h3>
-          <p>Derivations, numericals, concepts, and PYQ tracking.</p>
-        </button>
-
-        <button class="subject-card glass" data-subject="Chemistry">
-          <div class="subject-header">
-            <span class="subject-icon chemistry">⚗</span>
-            <span class="subject-percent" id="chemistry-percent">0%</span>
-          </div>
-          <h3>CHEMISTRY</h3>
-          <p>Reactions, NCERT points, exceptions, and named reactions.</p>
-        </button>
-      </div>
-    </template>
-
-    <template id="subject-template">
-      <div class="subject-head">
-        <div>
-          <div class="eyebrow">SUBJECT WORKSPACE</div>
-          <h3 id="subject-heading">Mathematics</h3>
-        </div>
-        <button id="add-subject-item" class="primary-btn small-btn">Add item</button>
-      </div>
-
-      <div class="tabs-row" id="subject-tabs"></div>
-      <div class="panel glass">
-        <div class="toolbar">
-          <input type="search" id="subject-search" placeholder="Search notes, questions and lectures" />
-          <select id="subject-status-filter">
-            <option value="all">All statuses</option>
-            <option value="Not Started">Not Started</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Completed">Completed</option>
-            <option value="Solved">Solved</option>
-            <option value="Needs Revision">Needs Revision</option>
-            <option value="Incorrect">Incorrect</option>
-          </select>
-        </div>
-        <div id="subject-list" class="list-stack"></div>
-      </div>
-    </template>
-
-    <template id="admin-template">
-      <div class="admin-grid">
-        <div class="panel glass">
-          <div class="panel-header">
-            <h3>Invite a new user</h3>
-          </div>
-          <form id="admin-invite-form" class="inline-form">
-            <input type="email" id="admin-email" placeholder="user@example.com" required />
-            <button type="submit" class="primary-btn small-btn">Send invite</button>
-          </form>
-          <div id="admin-message" class="message"></div>
-        </div>
-
-        <div class="panel glass">
-          <div class="panel-header">
-            <h3>Invitations</h3>
-          </div>
-          <div id="invitation-list" class="list-stack"></div>
-        </div>
-      </div>
-
-      <div class="panel glass" style="margin-top: 16px;">
-        <div class="panel-header">
-          <h3>Registered users</h3>
-        </div>
-        <div id="user-list" class="list-stack"></div>
-      </div>
-    </template>
-
-    <template id="settings-template">
-      <div class="settings-grid">
-        <div class="panel glass">
-          <div class="panel-header">
-            <h3>Profile</h3>
-          </div>
-          <label>
-            <span>Display name</span>
-            <input type="text" id="profile-name" placeholder="Your name" />
-          </label>
-          <button id="save-profile" class="primary-btn small-btn">Save profile</button>
-        </div>
-
-        <div class="panel glass">
-          <div class="panel-header">
-            <h3>Cloud data</h3>
-          </div>
-          <button id="export-data" class="secondary-btn small-btn">Export backup</button>
-          <button id="sync-now" class="secondary-btn small-btn">Sync now</button>
-        </div>
-      </div>
-    </template>
-
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="app.js"></script>
+    <script src="./config.js"></script>
+    <script src="./app.js" defer></script>
   </body>
 </html>
