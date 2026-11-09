@@ -1,0 +1,53 @@
+# JEE NEXUS V2
+
+A secure, invitation-only JEE preparation platform designed for Netlify + Supabase.
+
+## Important security note
+
+This version is intentionally online-first. It does not include service workers, PWA install support, offline storage, or offline sync. Those features are excluded by design for this release.
+
+This project is a secure deployment scaffold. Authentication, invitation flow, and email notifications are implemented in the architecture, but they will only work once the Supabase project and Netlify environment variables are connected.
+
+## Project structure
+
+- `index.html` — app shell and auth flow
+- `style.css` — dark crimson + neon emerald design
+- `app.js` — client logic for login, dashboard, admin, and fallback cloud flow
+- `netlify/functions/invite.js` — invitation creation and validation
+- `netlify/functions/login-notify.js` — admin login email notification
+- `netlify/functions/admin.js` — admin server-side access
+- `supabase/schema.sql` — schema and RLS rules
+- `netlify.toml` — Netlify configuration
+- `.env.example` — environment variable template
+
+## Supabase setup
+
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the SQL editor.
+3. Go to Authentication > Providers > Email.
+4. Disable public email sign-up.
+5. Add your deployed Netlify URL to the Auth redirect settings.
+6. Configure the invitation email template in Supabase Auth.
+
+## Netlify setup
+
+1. Import this repo into Netlify.
+2. Add these variables under Site settings > Environment variables:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `APP_URL`
+   - `ADMIN_EMAIL`
+   - `RESEND_API_KEY` or `SENDGRID_API_KEY`
+3. Deploy the site.
+
+## Security rules
+
+- Never expose the service role key in the frontend.
+- Only issue invitations from a server-side function.
+- Keep admin verification on the server.
+- Use Supabase Row Level Security.
+
+## Deployment status
+
+This repo is ready to be connected to a real Netlify + Supabase project. Without the actual environment credentials, authentication and cloud sync are not expected to work in production.

@@ -1,0 +1,35 @@
+exports.handler = async function (event) {
+  if (event.httpMethod !== 'GET') {
+    return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed.' }) };
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: 'Supabase configuration missing.' })
+    };
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/rest/v1/profiles?select=*`, {
+      headers: {
+        apikey: supabaseServiceKey,
+        Authorization: `Bearer ${supabaseServiceKey}`
+      }
+    });
+
+    const data = await response.json();
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ data })
+    };
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: error.message || 'Unexpected admin error.' })
+    };
+  }
+};
